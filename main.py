@@ -4,7 +4,7 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy import Integer, String, Float
 from flask_wtf import FlaskForm
-from wtforms import StringField, SubmitField
+from wtforms import StringField, SubmitField, FloatField
 from wtforms.validators import DataRequired
 import requests
 
@@ -34,6 +34,53 @@ class Movie(db.Model):
 with app.app_context():
     db.create_all()
 
+class EditForm(FlaskForm):
+    rating = FloatField(label="Your Rating out of 10 e.g. 7.3", validators=[DataRequired()])
+    review = StringField(label="Your Review", validators=[DataRequired()])
+    submit = SubmitField(label="Done")
+
+class AddForm(FlaskForm):
+    title = StringField(label="Movie Title", validators=[DataRequired()])
+    submit = SubmitField(label="Add Movie")
+
+
+@app.route("/")
+def home():
+    with app.app_context():
+        all_movies = db.session.execute(db.select(Movie)).scalars().all()
+    return render_template("index.html", movies=all_movies)
+
+@app.route('/edit/<movie_title>', methods=['GET','POST'])
+def add(movie_title):
+    edit_form = EditForm()
+    with app.app_context():
+        movie = db.session.execute(db.select(Movie).where(Movie.title == movie_title)).scalar()
+        if request.method == 'POST':
+            movie.rating = request.form['rating']
+            movie.review = request.form['review']
+            db.session.commit()
+            return redirect(url_for('home'))
+    return render_template('edit.html', form=edit_form)
+
+@app.route('/delete/<movie_title>', methods=['GET','POST'])
+def delete(movie_title):
+    with app.app_context():
+        movie_to_delete = db.session.execute(db.select(Movie).where(Movie.title == movie_title)).scalar()
+        db.session.delete(movie_to_delete)
+        db.session.commit()
+    return redirect(url_for('home'))
+
+@app.route('/add', methods=['GET','POST'])
+def add():
+    add_form = AddForm()
+    if request.method == 'POST':
+        pass
+    return render_template('add.html', form=add_form)
+
+if __name__ == '__main__':
+    app.run(debug=True)
+
+
 # new_movie = Movie(
 #     title="Phone Booth",
 #     year=2002,
@@ -58,12 +105,3 @@ with app.app_context():
 # with app.app_context():
 #     db.session.add(second_movie)
 #     db.session.commit()
-
-
-@app.route("/")
-def home():
-    return render_template("index.html")
-
-
-if __name__ == '__main__':
-    app.run(debug=True)
