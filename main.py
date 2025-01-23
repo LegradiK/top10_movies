@@ -51,7 +51,7 @@ def home():
     return render_template("index.html", movies=all_movies)
 
 @app.route('/edit/<movie_title>', methods=['GET','POST'])
-def add(movie_title):
+def edit(movie_title):
     edit_form = EditForm()
     with app.app_context():
         movie = db.session.execute(db.select(Movie).where(Movie.title == movie_title)).scalar()
@@ -73,8 +73,8 @@ def delete(movie_title):
 @app.route('/add', methods=['GET','POST'])
 def add():
     add_form = AddForm()
-    if request.method == 'POST':
-        pass
+    if request.method == 'POST' and add_form.validate_on_submit():
+        return redirect('home')
     return render_template('add.html', form=add_form)
 
 if __name__ == '__main__':
@@ -103,5 +103,5 @@ if __name__ == '__main__':
 
 
 # with app.app_context():
-#     db.session.add(second_movie)
+#     db.session.add(new_movie)
 #     db.session.commit()
