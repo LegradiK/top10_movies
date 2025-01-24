@@ -7,6 +7,10 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, SubmitField, FloatField
 from wtforms.validators import DataRequired
 import requests
+import os
+
+TMDB_TOKEN = os.getenv('TMDB_TOKEN')
+TMDB_API = os.getenv('TMDB_API')
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = '8BYkEfBA6O6donzWlSihBXox7C0sKR6b'
@@ -25,10 +29,10 @@ class Movie(db.Model):
     id: Mapped[int] = mapped_column(Integer, unique=True, nullable=False, primary_key=True)
     title: Mapped[str] = mapped_column(String(250), unique=True, nullable=False)
     year: Mapped[int] = mapped_column(Integer, nullable=False) 
-    description: Mapped[str] = mapped_column(String(250), nullable=False) 
-    rating: Mapped[float] = mapped_column(Float, nullable=False) 
-    ranking: Mapped[int] = mapped_column(Integer, nullable=False)
-    review: Mapped[str] = mapped_column(String(500), nullable=False)
+    description: Mapped[str] = mapped_column(String(1000), nullable=False) 
+    rating: Mapped[float] = mapped_column(Float, nullable=False, default=0.0) 
+    ranking: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    review: Mapped[str] = mapped_column(String(500), nullable=False, default="No review provided yet")
     img_url: Mapped[str] = mapped_column(String(250), nullable=False)
 
 with app.app_context():
@@ -74,8 +78,47 @@ def delete(movie_title):
 def add():
     add_form = AddForm()
     if request.method == 'POST' and add_form.validate_on_submit():
-        return redirect('home')
+        movie_title = add_form.title.data
+        url = f"https://api.themoviedb.org/3/search/movie?query={movie_title}&include_adult=false&language=en-US&page=1"
+        headers = {
+            "accept": "application/json",
+            "Authorization": f"Bearer {TMDB_TOKEN}"
+        }
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        search_result = response.json().get('results',[])
+        # print(search_result)
+        return render_template('select.html', data=search_result)
     return render_template('add.html', form=add_form)
+
+@app.route('/select/<int:movie_id>', methods=['GET','POST'])
+def select(movie_id):
+    url = f"https://api.themoviedb.org/3/movie/{movie_id}?language=en-US"
+    headers = {
+        "accept": "application/json",
+        "Authorization": f"Bearer {TMDB_TOKEN}"
+    }
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()
+    movie_data = response.json()
+    poster_url = "https://image.tmdb.org/t/p/w185/"
+    # print(response.text)
+    new_movie = Movie(
+        title=movie_data["original_title"],
+        img_url= poster_url + movie_data["poster_path"],
+        year = movie_data["release_date"],
+        description = movie_data["overview"]
+        )
+    movie_title = new_movie.title
+    with app.app_context():
+        existing_movie = db.session.execute(db.select(Movie).where(Movie.title == new_movie.title)).scalar()
+        if existing_movie:
+            return redirect(url_for('home'))
+        else:
+            db.session.add(new_movie)
+            db.session.commit()
+    return redirect(url_for('edit', movie_title=movie_title))
+
 
 if __name__ == '__main__':
     app.run(debug=True)
